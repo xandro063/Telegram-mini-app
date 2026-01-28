@@ -1,0 +1,147 @@
+<script>
+    // Простой бэкенд для теста
+    const BACKEND_URL = 'https://fncvwotggxekubbasrjx.supabase.co/functions/v1/telegram-mini-app';
+    
+    // Инициализация Telegram
+    const tg = window.Telegram.WebApp;
+    tg.expand();
+    
+    // Проверка админа (замените на ваш ID если нужно)
+    const user = tg.initDataUnsafe.user;
+    const isAdmin = user && user.id === 7156971224;
+    
+    if (isAdmin) {
+        // Показываем админ-панель
+        document.getElementById('admin-content').style.display = 'block';
+        document.getElementById('access-denied').style.display = 'none';
+        
+        // Загружаем данные
+        loadAdminData();
+    } else {
+        // Показываем отказ
+        document.getElementById('admin-content').style.display = 'none';
+        document.getElementById('access-denied').style.display = 'block';
+        
+        if (user) {
+            document.getElementById('user-id-display').textContent = user.id;
+        }
+    }
+    
+    // Функция загрузки данных
+    async function loadAdminData() {
+        try {
+            // Загружаем статистику
+            const statsResponse = await fetch(BACKEND_URL + '/admin/stats');
+            if (statsResponse.ok) {
+                const stats = await statsResponse.json();
+                document.getElementById('total-users').textContent = stats.stats.totalUsers || '0';
+                document.getElementById('total-balance').textContent = 
+                    new Intl.NumberFormat('ru-RU').format(stats.stats.totalBalance || 0) + ' ₽';
+            }
+            
+            // Загружаем настройки
+            const settingsResponse = await fetch(BACKEND_URL + '/admin/settings');
+            if (settingsResponse.ok) {
+                const settings = await settingsResponse.json();
+                if (settings.settings) {
+                    document.getElementById('ref-percent-1').value = settings.settings.ref_percent_1 || 10;
+                    document.getElementById('ref-percent-2').value = settings.settings.ref_percent_2 || 5;
+                }
+            }
+            
+            // Скрываем загрузчик
+            document.getElementById('recent-actions').innerHTML = '<p style="text-align:center;color:#666;">Нет операций</p>';
+            
+        } catch (error) {
+            console.error('Ошибка загрузки:', error);
+        }
+    }
+    
+    // Обновление баланса
+    async function updateBalance() {
+        const userId = document.getElementById('user-id').value;
+        const amount = document.getElementById('amount').value;
+        const reason = document.getElementById('reason').value;
+        
+        if (!userId || !amount) {
+            alert('Заполните ID и сумму');
+            return;
+        }
+        
+        const button = document.getElementById('update-btn');
+        button.innerHTML = '⏳ Обработка...';
+        button.disabled = true;
+        
+        try {
+            const response = await fetch(BACKEND_URL + '/admin/balance', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    adminId: 7156971224,
+                    userId: userId,
+                    amount: parseInt(amount),
+                    reason: reason || 'Изменение'
+                })
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                alert('✅ Баланс обновлен! Новый баланс: ' + result.user.balance + ' ₽');
+                
+                // Очищаем поля
+                document.getElementById('user-id').value = '';
+                document.getElementById('amount').value = '';
+                document.getElementById('reason').value = '';
+                
+                // Обновляем статистику
+                loadAdminData();
+            } else {
+                alert('❌ Ошибка сервера');
+            }
+            
+        } catch (error) {
+            alert('❌ Ошибка сети');
+        } finally {
+            button.innerHTML = '💰 Обновить баланс';
+            button.disabled = false;
+        }
+    }
+    
+    // Сохранение настроек
+    async function savePercentages() {
+        const percent1 = document.getElementById('ref-percent-1').value;
+        const percent2 = document.getElementById('ref-percent-2').value;
+        
+        const button = document.querySelector('.btn-success');
+        button.innerHTML = '⏳ Сохранение...';
+        button.disabled = true;
+        
+        try {
+            const response = await fetch(BACKEND_URL + '/admin/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    adminId: 7156971224,
+                    ref_percent_1: percent1,
+                    ref_percent_2: percent2
+                })
+            });
+            
+            if (response.ok) {
+                alert('✅ Настройки сохранены!');
+            } else {
+                alert('❌ Ошибка сохранения');
+            }
+            
+        } catch (error) {
+            alert('❌ Ошибка сети');
+        } finally {
+            button.innerHTML = '💾 Сохранить настройки';
+            button.disabled = false;
+        }
+    }
+    
+    // Глобальные функции
+    window.updateBalance = updateBalance;
+    window.savePercentages = savePercentages;
+</script>
