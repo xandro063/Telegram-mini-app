@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Админ-панель</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, sans-serif;
+            padding: 20px;
+            background: #0f172a;
+            color: white;
+            text-align: center;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+        h1 {
+            color: #3b82f6;
+            margin-bottom: 30px;
+        }
+        .btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 18px;
+            margin: 10px;
+            cursor: pointer;
+        }
+        .btn-back {
+            background: #64748b;
+        }
+        .admin-content {
+            background: #1e293b;
+            padding: 30px;
+            border-radius: 20px;
+            margin-top: 30px;
+        }
+        input {
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 10px;
+            border: 2px solid #475569;
+            background: #0f172a;
+            color: white;
+            font-size: 16px;
+        }
+        .alert {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .success {
+            background: #10b981;
+        }
+        .error {
+            background: #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Проверка прав -->
+        <div id="access-denied" style="display: none;">
+            <h2>⛔ Доступ запрещен</h2>
+            <p>У вас нет прав для доступа к админ-панели</p>
+            <p>Ваш ID: <span id="user-id"></span></p>
+            <button class="btn btn-back" onclick="window.location.href='index.html'">
+                ← Назад
+            </button>
+        </div>
+        
+        <!-- Админ-панель -->
+        <div id="admin-content" style="display: none;">
+            <h1>🔐 Админ-панель</h1>
+            
+            <div class="admin-content">
+                <h3>💰 Изменить баланс</h3>
+                <input type="number" id="user-id-input" placeholder="ID пользователя">
+                <input type="number" id="amount-input" placeholder="Сумма (+500 или -200)">
+                <input type="text" id="reason-input" placeholder="Причина">
+                <button class="btn" onclick="updateBalance()">Обновить баланс</button>
+                
+                <h3 style="margin-top: 40px;">⚙️ Настройки</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0;">
+                    <div>
+                        <label>Процент 1-го уровня</label>
+                        <input type="number" id="percent1" value="10" min="0" max="100">
+                    </div>
+                    <div>
+                        <label>Процент 2-го уровня</label>
+                        <input type="number" id="percent2" value="5" min="0" max="100">
+                    </div>
+                </div>
+                <button class="btn" onclick="saveSettings()">Сохранить настройки</button>
+                
+                <div style="margin-top: 40px;">
+                    <button class="btn btn-back" onclick="window.location.href='index.html'">
+                        ← Назад в кабинет
+                    </button>
+                </div>
+            </div>
+            
+            <div id="alert" class="alert" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        // Простой бэкенд
+        const BACKEND_URL = 'https://fncvwotggxekubbasrjx.supabase.co/functions/v1/telegram-mini-app';
+        
+        // Инициализация Telegram
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        
+        // Проверка админа
+        const user = tg.initDataUnsafe.user;
+        const isAdmin = user && user.id === 7156971224;
+        
+        if (isAdmin) {
+            // Показываем админ-панель
+            document.getElementById('admin-content').style.display = 'block';
+            document.getElementById('access-denied').style.display = 'none';
+        } else {
+            // Показываем отказ
+            document.getElementById('admin-content').style.display = 'none';
+            document.getElementById('access-denied').style.display = 'block';
+            
+            if (user) {
+                document.getElementById('user-id').textContent = user.id;
+            }
+        }
+        
+        // Функция обновления баланса
+        async function updateBalance() {
+            const userId = document.getElementById('user-id-input').value;
+            const amount = document.getElementById('amount-input').value;
+            const reason = document.getElementById('reason-input').value;
+            
+            if (!userId || !amount) {
+                showAlert('Заполните ID и сумму', 'error');
+                return;
+            }
+            
+            showAlert('⏳ Отправка...', '');
+            
+            try {
+                const response = await fetch(BACKEND_URL + '/admin/balance', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        adminId: 7156971224,
+                        userId: userId,
+                        amount: parseInt(amount),
+                        reason: reason || 'Изменение админом'
+                    })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    showAlert('✅ Баланс обновлен! Новый баланс: ' + result.user.balance + ' ₽', 'success');
+                    
+                    // Очищаем поля
+                    document.getElementById('user-id-input').value = '';
+                    document.getElementById('amount-input').value = '';
+                    document.getElementById('reason-input').value = '';
+                } else {
+                    showAlert('❌ Ошибка сервера', 'error');
+                }
+            } catch (error) {
+                showAlert('❌ Ошибка сети', 'error');
+            }
+        }
+        
+        // Функция сохранения настроек
+        async function saveSettings() {
+            const percent1 = document.getElementById('percent1').value;
+            const percent2 = document.getElementById('percent2').value;
+            
+            showAlert('⏳ Сохранение...', '');
+            
+            try {
+                const response = await fetch(BACKEND_URL + '/admin/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        adminId: 7156971224,
+                        ref_percent_1: percent1,
+                        ref_percent_2: percent2
+                    })
+                });
+                
+                if (response.ok) {
+                    showAlert('✅ Настройки сохранены!', 'success');
+                } else {
+                    showAlert('❌ Ошибка сохранения', 'error');
+                }
+            } catch (error) {
+                showAlert('❌ Ошибка сети', 'error');
+            }
+        }
+        
+        // Вспомогательная функция
+        function showAlert(message, type) {
+            const alertDiv = document.getElementById('alert');
+            alertDiv.textContent = message;
+            alertDiv.className = 'alert ' + type;
+            alertDiv.style.display = 'block';
+            
+            if (type === 'success' || type === 'error') {
+                setTimeout(() => {
+                    alertDiv.style.display = 'none';
+                }, 5000);
+            }
+        }
+    </script>
+</body>
+</html>
